@@ -66,48 +66,42 @@ def draw_map(img_w: int, img_h: int, map_np, beliefs_np, measure_map_np=None):
 
 
 def find_measurement_cells(map_np, direction: Direction, measurement):  
-    pad = (measurement, measurement)
-    map_padded_np = np.pad(map_np, [pad, pad], mode='constant')
-    
-    grid_rows, grid_cols = map_padded_np.shape
+    grid_rows, grid_cols = map_np.shape
     direction_map = np.zeros_like(map_np)
 
-    mask_size = measurement * 2 + 1
-    mask = np.zeros((mask_size, mask_size),  dtype=np.int64)
-    mask_up = mask.copy()
-    mask_up[0:measurement+1, measurement] = 1
+    for row in range(grid_rows):
+        for col in range(grid_cols): 
+            nth = 0
+            
+            if direction == Direction.UP:
+                for i in range(row, -1, -1): 
+                    if map_np[i, col]:
+                        nth += 1
+                    else:
+                        break
 
-    mask_right = mask.copy()
-    mask_right[measurement, measurement:] = 1
+            if direction == Direction.DOWN:
+                for i in range(row, grid_rows):
+                    if map_np[i, col]:
+                        nth += 1    
+                    else:
+                        break
 
-    mask_down = mask.copy()
-    mask_down[measurement:, measurement] = 1
+            if direction == Direction.RIGHT:
+                for i in range(col, grid_cols):
+                    if map_np[row, i]:
+                        nth += 1    
+                    else:
+                        break
 
-    mask_left = mask.copy()
-    mask_left[measurement, 0:measurement + 1] = 1
+            if direction == Direction.LEFT:
+                for i in range(col, -1, -1):
+                    if map_np[row, i]:
+                        nth += 1    
+                    else:
+                        break
 
-
-    if direction == direction.UP:
-        chosen_mask = mask_up
-    
-    if direction == direction.RIGHT:
-        chosen_mask = mask_right
-
-    if direction == direction.DOWN:
-        chosen_mask = mask_down
-
-    if direction == direction.LEFT:
-        chosen_mask = mask_left
-
-    for row in range(grid_rows - mask_size + 1):
-        for col in range(grid_cols - mask_size + 1):
-            s_from = slice(row, row + mask_size)
-            s_to = slice(col, col + mask_size)
-
-            patch = map_padded_np[s_from, s_to].copy()
-
-            patch_masked = patch & chosen_mask
-            if np.sum(patch_masked) == measurement + 1:
+            if nth == measurement:
                 direction_map[row, col] = 1
 
     return direction_map
@@ -150,8 +144,8 @@ def display_map(img_w, img_h, map_np, belief_map, img_name, measurement_map=None
     cv2.namedWindow(img_name, cv2.WINDOW_NORMAL)
     cv2.imshow(img_name, img)
 
-def normalize(belief_map):
-    return belief_map / belief_map.sum()
+def normalize(belief_maps):
+    return belief_maps / belief_maps.sum()
 
 if __name__ == "__main__":
 
@@ -190,21 +184,26 @@ if __name__ == "__main__":
     # set the order of actions
     actions = [
         [ Action.MEASUREMENT, 2 ],
-        [ Action.MOVEMENT, Direction.UP ],
-        [ Action.MEASUREMENT, 3 ],
-        [ Action.MOVEMENT, Direction.RIGHT ],
+        [ Action.MOVEMENT, Direction.LEFT ],
         [ Action.MEASUREMENT, 2 ],
-        [ Action.MOVEMENT, Direction.RIGHT ],
-        [ Action.MEASUREMENT, 1 ],
+        [ Action.MOVEMENT, Direction.DOWN ],
+        [ Action.MEASUREMENT, 2 ],
+        [ Action.MOVEMENT, Direction.LEFT ],
+        [ Action.MEASUREMENT, 3 ],
     ]
 
     # Execute actions
 
     # initialization
-    # display_map(img_w, img_h, map_np, belief_map, measurement_map, img_name + '_initialization')
+    # display_map(img_w, img_h, map_np, belief_maps[0], 'initialization')
+    # cv2.waitKey(0)
+
+    directions = [Direction.UP, Direction.RIGHT, Direction.DOWN, Direction.LEFT]
 
     for action, value in actions:
-        for nth, direction in enumerate([Direction.UP, Direction.RIGHT, Direction.DOWN, Direction.LEFT]): 
+        measurement_maps = []
+
+        for nth, direction in enumerate(directions): 
             measurement_map = None
             print(action, value)
 
@@ -215,18 +214,14 @@ if __name__ == "__main__":
             
             if action == Action.MOVEMENT:
                 belief_maps[nth] = movement_action(belief_maps[nth], value)
-
-            # display_map(img_w, img_h, map_np, belief_map, measurement_map, f'{img_name}_{action}')
+            
+            measurement_maps.append(measurement_map)
+            # display_map(img_w, img_h, map_np, belief_maps[nth], f'{direction}_{action}', measurement_map)
         
-            # Normalize
-            belief_maps[nth] = normalize(belief_maps[nth])
+        # Normalize
+        belief_maps = normalize(belief_maps)
 
+        for (nth, direction), measurement_map in zip(enumerate(directions), measurement_maps):
             display_map(img_w, img_h, map_np, belief_maps[nth], f'{direction}_{action}_normalization', measurement_map)
-            # cv2.waitKey(0)
-
-    # Experimental
-    squashed = np.concatenate(belief_maps, axis=0)
-    squashed = normalize(squashed)
-    display_map(img_w, img_h, map_np, squashed, 'squashed')
 
     cv2.waitKey(0)
